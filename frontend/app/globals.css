@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --space-black: #0d0d0d;
+  --electric-blue: #00ffff;
+  --cosmic-purple: #8b5cf6;
+  --neon-green: #00ffab;
+  --slate-grey: #1f2937;
+  --gunmetal-grey: #374151;
+  --star-white: #e5e7eb;
+}
+
+@layer base {
+  body {
+    background: var(--space-black);
+    color: var(--star-white);
+    font-family: var(--font-orbitron);
+  }
+}
+
+@layer components {
+  .neon-glow {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+  }
+
+  .neon-text {
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+  }
+
+  .cosmic-gradient {
+    background: linear-gradient(135deg, var(--cosmic-purple), var(--electric-blue));
+  }
+
+  .starfield-bg {
+    background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+  }
+}
+
+@keyframes pulse-neon {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-pulse-neon {
+  animation: pulse-neon 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
