@@ -1,23 +1,29 @@
-// SPDX-License-Identifier: MIT
+//SPDX-License-Identifier:MIT
+
+
 pragma solidity ^0.8.19;
 
 import {IRouterClient} from "@chainlink/contracts/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {Client} from  "@chainlink/contracts/src/v0.8/ccip/libraries/Client.sol";
-import {OwnerIsCreator} "@chainlink/contracts/src/v0.8/shared/access/OwnerIsCreator.sol";
+import {OwnerIsCreator} from "@chainlink/contracts/src/v0.8/shared/access/OwnerIsCreator.sol";
 import {CCIPReceiver} from "@chainlink/contracts/src/v0.8/ccip/applications/CCIPReceiver.sol";
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-// import "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3//contracts/utils/Counters.sol";
 
 /**
  * @title Ship
  * @dev Individual ship contract that handles multiple tokens, CCIP transfer and automation
  * Works on both source and destination chains, uses native tokens for CCIP fees
  */
-contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface, CCIPReceiver {
+// Removed CCIPReceiver from inheritance, as this contract will no longer receive CCIP messages
+// on the destination chain. It will only send.
+contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface {
     IRouterClient private immutable i_router;
     
+    // --- NEW: Address of the ShipReceiver contract on the destination chain ---
+    address public immutable destinationShipReceiver;
+
     // Ship parameters
     address public immutable creator;
     uint64 public immutable destinationChainSelector;
@@ -27,8 +33,9 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
     // Ship state
     uint8 public currentPassengers;
     bool public isLaunched;
-    bool public isReceived;
-    bool public isDistributed;
+    // isReceived and isDistributed are no longer needed here as the destination contract handles it
+    // bool public isReceived;
+    // bool public isDistributed;
     bytes32 public ccipMessageId;
     uint256 public collectedFees; // Native tokens collected for CCIP
     
@@ -38,10 +45,11 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
     mapping(address => uint256) public totalTokenAmounts;
     
     // Passenger data
-    struct Passenger {
-        address addr;
-        mapping(address => uint256) tokenAmounts; // token => amount
-    }
+    // Struct Passenger definition can be removed if not directly used here (it's internal to original Ship logic)
+    // struct Passenger {
+    //     address addr;
+    //     mapping(address => uint256) tokenAmounts; // token => amount
+    // }
     
     address[] public passengers;
     mapping(address => uint256) public passengerIndex;
@@ -56,9 +64,10 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
     event PassengerBoarded(address indexed passenger, address[] tokens, uint256[] amounts, uint8 passengerCount);
     event ShipLaunched(bytes32 indexed messageId, address[] tokens, uint256[] totalAmounts);
     event CCIPFeePaid(uint256 feeAmount);
-    event ShipReceived(bytes32 indexed messageId, address[] tokens, uint256[] totalAmounts);
-    event TokensDistributed(address indexed recipient, address[] tokens, uint256[] amounts);
-    event DistributionCompleted(bytes32 indexed messageId);
+    // ShipReceived, TokensDistributed, DistributionCompleted are now emitted by ShipReceiver
+    // event ShipReceived(bytes32 indexed messageId, address[] tokens, uint256[] totalAmounts);
+    // event TokensDistributed(address indexed recipient, address[] tokens, uint256[] amounts);
+    // event DistributionCompleted(bytes32 indexed messageId);
     event TokenAdded(address indexed token);
     
     // Errors
@@ -70,10 +79,11 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
     error InsufficientFee();
     error CCIPTransferFailed();
     error UnauthorizedSender();
-    error UnauthorizedSourceChain();
-    error AlreadyReceived();
-    error NotReceived();
-    error AlreadyDistributed();
+    // UnauthorizedSourceChain, AlreadyReceived, NotReceived, AlreadyDistributed are for receiver contract
+    // error UnauthorizedSourceChain();
+    // error AlreadyReceived();
+    // error NotReceived();
+    // error AlreadyDistributed();
     error TokenNotSupported();
     error InvalidTokensAndAmounts();
     error InsufficientNativeBalance();
@@ -84,10 +94,12 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
         uint256[] memory _initialAmounts,
         uint64 _destinationChainSelector,
         uint8 _capacity,
-        address _router
-    ) CCIPReceiver(_router) payable {
+        address _router,
+        address _destinationShipReceiver // NEW: Pass the address of the receiver contract on destination
+    ) OwnerIsCreator() payable { // Removed CCIPReceiver(_router) here
         require(_initialTokens.length == _initialAmounts.length, "Arrays length mismatch");
         require(_initialTokens.length > 0, "At least one token required");
+        require(_destinationShipReceiver != address(0), "Invalid destinationShipReceiver address");
         
         creator = _creator;
         destinationChainSelector = _destinationChainSelector;
@@ -95,6 +107,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
         createdAt = block.timestamp;
         
         i_router = IRouterClient(_router);
+        destinationShipReceiver = _destinationShipReceiver; // Store the receiver address
         
         // Add supported tokens
         for (uint256 i = 0; i < _initialTokens.length; i++) {
@@ -186,6 +199,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
     
     /**
      * @dev Build CCIP message for multi-token transfer
+     * @dev Now sends to the dedicated ShipReceiver contract address
      */
     function _buildCCIPMessage() internal view returns (Client.EVM2AnyMessage memory) {
         // Create token amounts array for all supported tokens
@@ -202,11 +216,12 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
         bytes memory data = abi.encode(passengers, supportedTokens, _getPassengerTokenData());
         
         return Client.EVM2AnyMessage({
-            receiver: abi.encode(address(this)),
+            // NEW: Receiver is the dedicated ShipReceiver contract address
+            receiver: abi.encode(destinationShipReceiver), 
             data: data,
             tokenAmounts: tokenAmounts,
             extraArgs: Client._argsToBytes(
-                Client.EVMExtraArgsV1({gasLimit: 500_000})
+                Client.EVMExtraArgsV1({gasLimit: 500_000}) // Ensure enough gas for receiver logic
             ),
             feeToken: address(0) // Use native tokens for fees
         });
@@ -268,101 +283,12 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
         }
     }
     
-    /**
-     * @dev Handle incoming CCIP message and receive tokens
-     */
-    function _ccipReceive(Client.Any2EVMMessage memory any2EvmMessage) internal override 
+    // _ccipReceive function removed from here as it's now in ShipReceiver
+    // function _ccipReceive(Client.Any2EVMMessage memory any2EvmMessage) internal override 
+    // { ... }
     
-    {
-        if (isReceived) revert AlreadyReceived();
-        
-        bytes32 messageId = any2EvmMessage.messageId;
-        
-        // Extract data from the message
-        (
-            address[] memory receivedPassengers,
-            address[] memory receivedTokens,
-            uint256[][] memory receivedPassengerTokenData
-        ) = abi.decode(any2EvmMessage.data, (address[], address[], uint256[][]));
-        
-        // Update ship state with received data
-        passengers = receivedPassengers;
-        supportedTokens = receivedTokens;
-        currentPassengers = uint8(receivedPassengers.length);
-        
-        // Process received tokens and passenger data
-        for (uint256 i = 0; i < receivedTokens.length; i++) {
-            isTokenSupported[receivedTokens[i]] = true;
-            
-            uint256 tokenTotal = 0;
-            for (uint256 j = 0; j < receivedPassengers.length; j++) {
-                passengerTokenAmounts[receivedPassengers[j]][receivedTokens[i]] = receivedPassengerTokenData[j][i];
-                tokenTotal += receivedPassengerTokenData[j][i];
-            }
-            totalTokenAmounts[receivedTokens[i]] = tokenTotal;
-        }
-        
-        // Update passenger mappings
-        for (uint256 i = 0; i < receivedPassengers.length; i++) {
-            isPassenger[receivedPassengers[i]] = true;
-            passengerIndex[receivedPassengers[i]] = i;
-        }
-        
-        ccipMessageId = messageId;
-        isReceived = true;
-        
-        // Create arrays for event
-        uint256[] memory totalAmounts = new uint256[](supportedTokens.length);
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            totalAmounts[i] = totalTokenAmounts[supportedTokens[i]];
-        }
-        
-        emit ShipReceived(messageId, supportedTokens, totalAmounts);
-        
-        // Automatically distribute tokens to passengers
-        _distributeTokens();
-    }
-    
-    /**
-     * @dev Internal function to distribute tokens to passengers
-     */
-    function _distributeTokens() internal {
-        if (!isReceived) revert NotReceived();
-        if (isDistributed) revert AlreadyDistributed();
-        
-        for (uint256 i = 0; i < passengers.length; i++) {
-            address passenger = passengers[i];
-            
-            // Prepare arrays for this passenger
-            uint256 tokenCount = 0;
-            for (uint256 j = 0; j < supportedTokens.length; j++) {
-                if (passengerTokenAmounts[passenger][supportedTokens[j]] > 0) {
-                    tokenCount++;
-                }
-            }
-            
-            address[] memory passengerTokens = new address[](tokenCount);
-            uint256[] memory passengerAmounts = new uint256[](tokenCount);
-            
-            uint256 index = 0;
-            for (uint256 j = 0; j < supportedTokens.length; j++) {
-                uint256 amount = passengerTokenAmounts[passenger][supportedTokens[j]];
-                if (amount > 0) {
-                    passengerTokens[index] = supportedTokens[j];
-                    passengerAmounts[index] = amount;
-                    IERC20(supportedTokens[j]).transfer(passenger, amount);
-                    index++;
-                }
-            }
-            
-            if (tokenCount > 0) {
-                emit TokensDistributed(passenger, passengerTokens, passengerAmounts);
-            }
-        }
-        
-        isDistributed = true;
-        emit DistributionCompleted(ccipMessageId);
-    }
+    // _distributeTokens function removed from here as it's now in ShipReceiver
+    // function _distributeTokens() internal { ... }
 
     
     /**
@@ -412,8 +338,9 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
         uint8 _capacity,
         uint256 _collectedFees,
         bool _isLaunched,
-        bool _isReceived,
-        bool _isDistributed,
+        // Removed receiver-side flags from this contract's status
+        // bool _isReceived, 
+        // bool _isDistributed,
         bytes32 _ccipMessageId,
         uint256 _ccipFee,
         uint256 _tokenCount
@@ -423,8 +350,8 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
             capacity,
             collectedFees,
             isLaunched,
-            isReceived,
-            isDistributed,
+            // _isReceived,
+            // _isDistributed,
             ccipMessageId,
             getCCIPFee(),
             supportedTokens.length
@@ -454,7 +381,8 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface,
      */
     function emergencyWithdraw(address _token) external {
         require(msg.sender == creator || msg.sender == owner(), "Unauthorized");
-        require(!isLaunched || isDistributed, "Ship in transit");
+        // Simplified condition as this contract is no longer the receiver
+        require(!isLaunched, "Ship in transit"); 
         
         uint256 balance = IERC20(_token).balanceOf(address(this));
         if (balance > 0) {

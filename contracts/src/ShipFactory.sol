@@ -69,7 +69,8 @@ contract ShipFactory is OwnerIsCreator, ReentrancyGuard {
         address[] calldata _tokens,
         uint256[] calldata _amounts,
         uint64 _destinationChainSelector,
-        uint8 _capacity
+        uint8 _capacity,
+        address _destinationShipReceiver
     ) external payable nonReentrant returns (address shipAddress) {
         // Validation
         if (_capacity != 1 && _capacity != 2 && _capacity != 5 && _capacity != 10) {
@@ -106,7 +107,8 @@ contract ShipFactory is OwnerIsCreator, ReentrancyGuard {
             _amounts,
             _destinationChainSelector,
             _capacity,
-            router
+            router,
+            _destinationShipReceiver
         );
         
         shipAddress = address(newShip);
