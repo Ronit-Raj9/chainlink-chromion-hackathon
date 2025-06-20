@@ -221,7 +221,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
             data: data,
             tokenAmounts: tokenAmounts,
             extraArgs: Client._argsToBytes(
-                Client.EVMExtraArgsV1({gasLimit: 500_000}) // Ensure enough gas for receiver logic
+                Client.EVMExtraArgsV1({gasLimit: 3_000_000}) // Ensure enough gas for receiver logic
             ),
             feeToken: address(0) // Use native tokens for fees
         });
