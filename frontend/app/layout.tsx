@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { Orbitron, Share_Tech_Mono } from "next/font/google"
 import "./globals.css"
 import { Navigation } from "@/components/navigation"
-import { WalletProvider } from "@/components/wallet-provider"
+import { Providers } from "./providers"
 import { Toaster } from "@/components/ui/toaster"
 
 const orbitron = Orbitron({
@@ -31,11 +31,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${orbitron.variable} ${shareTechMono.variable} font-sans antialiased`}>
-        <WalletProvider>
+        <Providers>
           <Navigation />
           {children}
           <Toaster />
-        </WalletProvider>
+        </Providers>
       </body>
     </html>
   )
