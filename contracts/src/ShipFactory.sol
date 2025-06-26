@@ -14,7 +14,7 @@ contract ShipFactory is OwnerIsCreator, ReentrancyGuard {
     // using Counters for Counters.Counter;
     
     // Chainlink contract addresses
-    address public immutable router;
+    address public immutable ROUTER;
     
     // Factory state
     // Counters.Counter private shipCounter;
@@ -48,7 +48,7 @@ contract ShipFactory is OwnerIsCreator, ReentrancyGuard {
     error InvalidTokensAndAmounts();
     
     constructor(address _router) {
-        router = _router;
+        ROUTER = _router;
         shipCounter = 0;
         
         // Initialize capacity fees (in wei)
@@ -107,7 +107,7 @@ contract ShipFactory is OwnerIsCreator, ReentrancyGuard {
             _amounts,
             _destinationChainSelector,
             _capacity,
-            router,
+            ROUTER,
             _destinationShipReceiver
         );
         
