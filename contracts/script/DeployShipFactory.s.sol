@@ -1,25 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
 import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
 import {ShipFactory} from "../src/ShipFactory.sol";
 
+/**
+ * @title DeployShipFactory
+ * @dev Deploys the ShipFactory contract.
+ * Takes a router address as an argument.
+ */
 contract DeployShipFactory is Script {
-    
-    function run() external {
-        // Get network name from environment or use default
-        // string memory network = vm.envOr("NETWORK", string("sepolia"));
-        
-        // // Get router address for the network
-        // address routerAddress = routers[network];
-        address routerAddress = 0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59;
-        require(routerAddress != address(0), "Router address not found for network");
-        
-        // Get private key from environment
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
-        // Start broadcasting transactions
-        vm.startBroadcast(deployerPrivateKey);
+    function run(address routerAddress) public {
+        vm.startBroadcast();
         
         // Deploy ShipFactory
         ShipFactory shipFactory = new ShipFactory(routerAddress);
@@ -29,10 +22,9 @@ contract DeployShipFactory is Script {
         
         // Log deployment info
         console.log("=== ShipFactory Deployment ===");
-        // console.log("Network:", network);
         console.log("Router Address:", routerAddress);
         console.log("ShipFactory Address:", address(shipFactory));
-        console.log("Deployer:", vm.addr(deployerPrivateKey));
+        console.log("Deployer:", msg.sender);
         
         // Verify capacity fees
         console.log("\n=== Capacity Fees ===");

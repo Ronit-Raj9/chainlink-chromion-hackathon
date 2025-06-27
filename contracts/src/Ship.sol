@@ -19,16 +19,16 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 // Removed CCIPReceiver from inheritance, as this contract will no longer receive CCIP messages
 // on the destination chain. It will only send.
 contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface {
-    IRouterClient private immutable i_router;
+    IRouterClient private immutable I_ROUTER;
     
     // --- NEW: Address of the ShipReceiver contract on the destination chain ---
-    address public immutable destinationShipReceiver;
+    address public immutable DESTINATION_SHIP_RECEIVER;
 
     // Ship parameters
-    address public immutable creator;
-    uint64 public immutable destinationChainSelector;
-    uint8 public immutable capacity;
-    uint256 public immutable createdAt;
+    address public immutable CREATOR;
+    uint64 public immutable DESTINATION_CHAIN_SELECTOR;
+    uint8 public immutable CAPACITY;
+    uint256 public immutable CREATED_AT;
     
     // Ship state
     uint8 public currentPassengers;
@@ -101,13 +101,13 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
         require(_initialTokens.length > 0, "At least one token required");
         require(_destinationShipReceiver != address(0), "Invalid destinationShipReceiver address");
         
-        creator = _creator;
-        destinationChainSelector = _destinationChainSelector;
-        capacity = _capacity;
-        createdAt = block.timestamp;
+        CREATOR = _creator;
+        DESTINATION_CHAIN_SELECTOR = _destinationChainSelector;
+        CAPACITY = _capacity;
+        CREATED_AT = block.timestamp;
         
-        i_router = IRouterClient(_router);
-        destinationShipReceiver = _destinationShipReceiver; // Store the receiver address
+        I_ROUTER = IRouterClient(_router);
+        DESTINATION_SHIP_RECEIVER = _destinationShipReceiver; // Store the receiver address
         
         // Add supported tokens
         for (uint256 i = 0; i < _initialTokens.length; i++) {
@@ -142,7 +142,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
         payable 
         nonReentrant 
     {
-        if (currentPassengers >= capacity) revert ShipFull();
+        if (currentPassengers >= CAPACITY) revert ShipFull();
         if (isLaunched) revert AlreadyLaunched();
         if (isPassenger[msg.sender]) revert AlreadyPassenger();
         if (_tokens.length != _amounts.length) revert InvalidTokensAndAmounts();
@@ -190,18 +190,18 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
     /**
      * @dev Calculate CCIP fee for the transfer using native tokens
      */
-    function getCCIPFee() public view returns (uint256) {
+    function getCcipFee() public view returns (uint256) {
         if (supportedTokens.length == 0) return 0;
         
-        Client.EVM2AnyMessage memory message = _buildCCIPMessage();
-        return i_router.getFee(destinationChainSelector, message);
+        Client.EVM2AnyMessage memory message = _buildCcipMessage();
+        return I_ROUTER.getFee(DESTINATION_CHAIN_SELECTOR, message);
     }
     
     /**
      * @dev Build CCIP message for multi-token transfer
      * @dev Now sends to the dedicated ShipReceiver contract address
      */
-    function _buildCCIPMessage() internal view returns (Client.EVM2AnyMessage memory) {
+    function _buildCcipMessage() internal view returns (Client.EVM2AnyMessage memory) {
         // Create token amounts array for all supported tokens
         Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](supportedTokens.length);
         
@@ -217,7 +217,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
         
         return Client.EVM2AnyMessage({
             // NEW: Receiver is the dedicated ShipReceiver contract address
-            receiver: abi.encode(destinationShipReceiver), 
+            receiver: abi.encode(DESTINATION_SHIP_RECEIVER), 
             data: data,
             tokenAmounts: tokenAmounts,
             extraArgs: Client._argsToBytes(
@@ -247,21 +247,21 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
      * @dev Launch the ship via CCIP using native tokens for fees
      */
     function launchShip() public nonReentrant {
-        if (currentPassengers != capacity) revert NotFull();
+        if (currentPassengers != CAPACITY) revert NotFull();
         if (isLaunched) revert AlreadyLaunched();
         
-        uint256 ccipFee = getCCIPFee();
+        uint256 ccipFee = getCcipFee();
         if (collectedFees < ccipFee) revert InsufficientFee();
         
         // Approve tokens for CCIP router
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-            IERC20(supportedTokens[i]).approve(address(i_router), totalTokenAmounts[supportedTokens[i]]);
+            IERC20(supportedTokens[i]).approve(address(I_ROUTER), totalTokenAmounts[supportedTokens[i]]);
         }
         
         // Build and send CCIP message
-        Client.EVM2AnyMessage memory message = _buildCCIPMessage();
+        Client.EVM2AnyMessage memory message = _buildCcipMessage();
         
-        try i_router.ccipSend{value: ccipFee}(destinationChainSelector, message) returns (bytes32 messageId) {
+        try I_ROUTER.ccipSend{value: ccipFee}(DESTINATION_CHAIN_SELECTOR, message) returns (bytes32 messageId) {
             ccipMessageId = messageId;
             isLaunched = true;
             collectedFees -= ccipFee; // Deduct used fee
@@ -277,7 +277,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
         } catch {
             // Revert approvals on failure
             for (uint256 i = 0; i < supportedTokens.length; i++) {
-                IERC20(supportedTokens[i]).approve(address(i_router), 0);
+                IERC20(supportedTokens[i]).approve(address(I_ROUTER), 0);
             }
             revert CCIPTransferFailed();
         }
@@ -300,14 +300,14 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
         override
         returns (bool upkeepNeeded, bytes memory performData)
     {
-        upkeepNeeded = (currentPassengers == capacity) && 
+        upkeepNeeded = (currentPassengers == CAPACITY) && 
                       !isLaunched && 
-                      (collectedFees >= getCCIPFee());
+                      (collectedFees >= getCcipFee());
         performData = "";
     }
     
     function performUpkeep(bytes calldata) external override {
-        if (currentPassengers == capacity && !isLaunched && collectedFees >= getCCIPFee()) {
+        if (currentPassengers == CAPACITY && !isLaunched && collectedFees >= getCcipFee()) {
             launchShip();
         }
     }
@@ -347,13 +347,13 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
     ) {
         return (
             currentPassengers,
-            capacity,
+            CAPACITY,
             collectedFees,
             isLaunched,
             // _isReceived,
             // _isDistributed,
             ccipMessageId,
-            getCCIPFee(),
+            getCcipFee(),
             supportedTokens.length
         );
     }
@@ -366,7 +366,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
      * @dev Withdraw excess fees (only creator after launch or owner)
      */
     function withdrawExcessFees() external {
-        require(msg.sender == creator || msg.sender == owner(), "Unauthorized");
+        require(msg.sender == CREATOR || msg.sender == owner(), "Unauthorized");
         require(isLaunched || msg.sender == owner(), "Ship not launched");
         
         uint256 amount = collectedFees;
@@ -380,7 +380,7 @@ contract Ship is OwnerIsCreator, ReentrancyGuard, AutomationCompatibleInterface 
      * @dev Emergency function to recover stuck tokens (only creator/owner)
      */
     function emergencyWithdraw(address _token) external {
-        require(msg.sender == creator || msg.sender == owner(), "Unauthorized");
+        require(msg.sender == CREATOR || msg.sender == owner(), "Unauthorized");
         // Simplified condition as this contract is no longer the receiver
         require(!isLaunched, "Ship in transit"); 
         
