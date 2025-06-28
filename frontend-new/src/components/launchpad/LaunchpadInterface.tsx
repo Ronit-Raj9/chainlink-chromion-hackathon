@@ -56,30 +56,22 @@ const L1_CHAINS = [
     bgColor: 'bg-yellow-500/20',
     borderColor: 'border-yellow-400/50'
   },
-  { 
-    id: 1, // Ethereum Mainnet
-    name: 'Ethereum Mainnet', 
-    icon: '💎', 
-    color: 'from-blue-400 to-purple-500',
-    bgColor: 'bg-blue-500/20',
-    borderColor: 'border-blue-400/50'
-  },
-  { 
-    id: 56, // BSC Mainnet
-    name: 'BNB Chain', 
-    icon: '🟡', 
-    color: 'from-yellow-300 to-yellow-600',
-    bgColor: 'bg-yellow-500/20',
-    borderColor: 'border-yellow-400/50'
-  },
-  { 
-    id: 43114, // Avalanche Mainnet
-    name: 'Avalanche', 
-    icon: '🔺', 
-    color: 'from-red-400 to-pink-500',
-    bgColor: 'bg-red-500/20',
-    borderColor: 'border-red-400/50'
-  }
+  // { 
+  //   id: 1, // Ethereum Mainnet
+  //   name: 'Ethereum Mainnet', 
+  //   icon: '💎', 
+  //   color: 'from-blue-400 to-purple-500',
+  //   bgColor: 'bg-blue-500/20',
+  //   borderColor: 'border-blue-400/50'
+  // },
+  // { 
+  //   id: 56, // BSC Mainnet
+  //   name: 'BNB Chain', 
+  //   icon: '🟡', 
+  //   color: 'from-yellow-300 to-yellow-600',
+  //   bgColor: 'bg-yellow-500/20',
+  //   borderColor: 'border-yellow-400/50'
+  // }
 ]
 
 // Starship component with configurable seats
