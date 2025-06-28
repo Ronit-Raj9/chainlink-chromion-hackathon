@@ -2,7 +2,8 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { useState } from "react"
-import type { LaunchState } from "./LaunchpadInterface"
+
+type LaunchState = "idle" | "configuring" | "creating" | "launching" | "traveling" | "completed" | "failed"
 
 interface Chain {
   id: string
@@ -58,7 +59,7 @@ export default function ChainSelector({ type, selectedChain, onChainSelect, laun
           {type === "source" ? "🌍 SOURCE WORLD" : "🌕 TARGET WORLD"}
         </h3>
         <p className="text-sm text-gray-400 font-tech">
-          {type === "source" ? "Layer 2 Departure" : "Layer 1 Destination"}
+          {type === "source" ? "Arbitrum" : "Ethereum"}
         </p>
       </div>
 

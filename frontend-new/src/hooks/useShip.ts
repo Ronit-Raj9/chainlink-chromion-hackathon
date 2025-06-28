@@ -1,143 +1,266 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, formatEther } from 'viem'
-import { SHIP_ABI, SUPPORTED_TOKENS, CONTRACTS } from '@/lib/contracts'
+import { useState } from 'react'
+import { useAccount, useWriteContract, useReadContract, usePublicClient } from 'wagmi'
+import { parseEther, Address, erc20Abi } from 'viem'
+import { toast } from 'react-hot-toast'
+import { SHIP_ABI } from '@/lib/contracts'
+import { startTransactionMonitoring } from '@/lib/transaction-monitor'
 
-export function useShip(shipAddress?: `0x${string}`) {
-  const { writeContract, data: hash, isPending } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  })
+export interface ShipStatus {
+  currentPassengers: number
+  capacity: number
+  collectedFees: bigint
+  isLaunched: boolean
+  ccipMessageId: string
+  ccipFee: bigint
+  tokenCount: bigint
+}
 
-  // Get ship status
+export function useShip(shipAddress: Address | undefined) {
+  const { address } = useAccount()
+  const publicClient = usePublicClient()
+  const [isBoarding, setIsBoarding] = useState(false)
+  const [isLaunching, setIsLaunching] = useState(false)
+  
+  const { writeContractAsync } = useWriteContract()
+
+  // Read ship status
   const { data: shipStatus, refetch: refetchStatus } = useReadContract({
     address: shipAddress,
     abi: SHIP_ABI,
     functionName: 'getShipStatus',
-    chainId: CONTRACTS.SHIP_FACTORY.chainId,
     query: {
       enabled: !!shipAddress,
-      refetchInterval: 5000, // Refetch every 5 seconds
-    }
+    },
   })
 
-  // Get CCIP fee
-  const { data: ccipFee } = useReadContract({
-    address: shipAddress,
-    abi: SHIP_ABI,
-    functionName: 'getCcipFee',
-    chainId: CONTRACTS.SHIP_FACTORY.chainId,
-    query: {
-      enabled: !!shipAddress,
-    }
-  })
-
-  // Get supported tokens
+  // Read supported tokens
   const { data: supportedTokens } = useReadContract({
     address: shipAddress,
     abi: SHIP_ABI,
     functionName: 'getSupportedTokens',
-    chainId: CONTRACTS.SHIP_FACTORY.chainId,
     query: {
       enabled: !!shipAddress,
-    }
+    },
   })
 
-  // Board ship function
-  const boardShip = async (
-    tokens: string[],
-    amounts: string[],
-    tokenDecimals: number[]
-  ) => {
-    if (!shipAddress) {
-      throw new Error('Ship address is required')
+  // Read CCIP fee
+  const { data: ccipFee } = useReadContract({
+    address: shipAddress,
+    abi: SHIP_ABI,
+    functionName: 'getCcipFee',
+    query: {
+      enabled: !!shipAddress,
+    },
+  })
+
+  const boardShip = async (tokens: string[], amounts: string[]) => {
+    if (!address || !shipAddress) {
+      toast.error('Please connect your wallet')
+      return null
     }
 
+    setIsBoarding(true)
     try {
-      // Convert amounts to wei with proper decimals
-      const amountsInWei = amounts.map((amount, index) => 
-        parseUnits(amount, tokenDecimals[index])
-      )
-
-      // Get token addresses from our supported tokens
-      const tokenAddresses = tokens.map(symbol => {
-        const tokenInfo = SUPPORTED_TOKENS[CONTRACTS.SHIP_FACTORY.chainId]?.[symbol as keyof typeof SUPPORTED_TOKENS[421614]]
-        if (!tokenInfo) {
-          throw new Error(`Token ${symbol} not supported on this chain`)
+      // Convert amounts to wei
+      const amountsInWei = amounts.map(amount => parseEther(amount))
+      
+      // Check and handle token approvals for each token
+      toast.loading('Checking token approvals...')
+      for (let i = 0; i < tokens.length; i++) {
+        const tokenAddress = tokens[i] as `0x${string}`
+        const amount = amountsInWei[i]
+        
+        // Check current allowance
+        const allowanceData = await publicClient?.readContract({
+          address: tokenAddress,
+          abi: erc20Abi,
+          functionName: 'allowance',
+          args: [address, shipAddress],
+        })
+        
+        const allowance = allowanceData || BigInt(0)
+        
+        // If allowance is insufficient, request approval
+        if (allowance < amount) {
+          toast.dismiss()
+          toast.loading(`Approving ${tokens[i]} for ship boarding...`)
+          
+          try {
+            const approvalHash = await writeContractAsync({
+              address: tokenAddress,
+              abi: erc20Abi,
+              functionName: 'approve',
+              args: [shipAddress, amount],
+            })
+            
+            // Wait for approval transaction to be mined
+            if (publicClient) {
+              await publicClient.waitForTransactionReceipt({ hash: approvalHash })
+            }
+            
+            toast.dismiss()
+            toast.success(`Token ${i + 1} approved for boarding!`)
+          } catch (approvalError) {
+            toast.dismiss()
+            throw new Error(`Failed to approve token ${i + 1}: ${approvalError instanceof Error ? approvalError.message : 'Unknown error'}`)
+          }
         }
-        return tokenInfo.address
+      }
+      
+      toast.dismiss()
+      toast.loading('Boarding ship...')
+      
+      // Base fee for boarding
+      const boardingFee = parseEther('0.001') // BASE_FEE from contract
+
+      console.log('Boarding ship with:', {
+        tokens,
+        amounts: amountsInWei,
+        fee: boardingFee
       })
 
-      // Calculate boarding fee (BASE_FEE + TOKEN_FEE for new tokens)
-      const baseFee = parseUnits('0.001', 18) // 0.001 ETH base fee
-      const tokenFee = parseUnits('0.0005', 18) // 0.0005 ETH per token
-
-      // For simplicity, assume all tokens might need fee (can be optimized)
-      const totalFee = baseFee + (tokenFee * BigInt(tokens.length))
-
-      // Call contract
-      writeContract({
+      const hash = await writeContractAsync({
         address: shipAddress,
         abi: SHIP_ABI,
         functionName: 'boardShip',
-        args: [tokenAddresses, amountsInWei],
-        value: totalFee,
-        chainId: CONTRACTS.SHIP_FACTORY.chainId,
+        args: [tokens as `0x${string}`[], amountsInWei],
+        value: boardingFee,
       })
 
-      return { success: true, hash }
-    } catch (error) {
+      // Log transaction to dashboard
+      if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).addTransaction) {
+        const addFn = (window as unknown as Record<string, unknown>).addTransaction as (
+          transaction: Record<string, unknown>
+        ) => void
+        addFn({
+          id: `ship_boarding_${hash}_${Date.now()}`,
+          type: 'ship_boarding',
+          hash,
+          timestamp: Date.now(),
+          status: 'pending',
+          amount: '0.001',
+          token: 'ETH',
+          shipAddress: shipAddress,
+          description: `Boarded ship with ${tokens.length} tokens`,
+          metadata: {
+            tokens,
+            amounts,
+            shipAddress
+          }
+        })
+      }
+
+      // Start monitoring transaction
+      if (publicClient) {
+        startTransactionMonitoring(publicClient, hash)
+      }
+
+      toast.dismiss()
+      toast.success('Successfully boarded the ship!')
+      await refetchStatus()
+      return hash
+    } catch (error: unknown) {
       console.error('Error boarding ship:', error)
-      return { success: false, error: error as Error }
+      toast.dismiss()
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      
+      // More specific error messages
+      if (errorMessage.includes('ShipFull')) {
+        toast.error('Ship is full - cannot board more passengers')
+      } else if (errorMessage.includes('AlreadyLaunched')) {
+        toast.error('Ship has already launched - cannot board')
+      } else if (errorMessage.includes('AlreadyPassenger')) {
+        toast.error('You are already a passenger on this ship')
+      } else if (errorMessage.includes('InsufficientFee')) {
+        toast.error('Insufficient boarding fee. Please check the required amount.')
+      } else if (errorMessage.includes('TokenTransferFailed')) {
+        toast.error('Token transfer failed. Please check your token balance and approvals.')
+      } else if (errorMessage.includes('approve')) {
+        toast.error('Token approval failed. Please try again.')
+      } else if (errorMessage.includes('rejected')) {
+        toast.error('Transaction rejected by user')
+      } else {
+        toast.error(errorMessage || 'Failed to board ship')
+      }
+      return null
+    } finally {
+      setIsBoarding(false)
     }
   }
 
-  // Launch ship function
   const launchShip = async () => {
-    if (!shipAddress) {
-      throw new Error('Ship address is required')
+    if (!address || !shipAddress) {
+      toast.error('Please connect your wallet')
+      return null
     }
 
+    setIsLaunching(true)
     try {
-      writeContract({
+      console.log('Launching ship...')
+
+      const hash = await writeContractAsync({
         address: shipAddress,
         abi: SHIP_ABI,
         functionName: 'launchShip',
-        chainId: CONTRACTS.SHIP_FACTORY.chainId,
       })
 
-      return { success: true, hash }
-    } catch (error) {
+      // Log transaction to dashboard
+      if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).addTransaction) {
+        const addFn = (window as unknown as Record<string, unknown>).addTransaction as (
+          transaction: Record<string, unknown>
+        ) => void
+        addFn({
+          id: `ship_launch_${hash}_${Date.now()}`,
+          type: 'ship_launch',
+          hash,
+          timestamp: Date.now(),
+          status: 'pending',
+          shipAddress: shipAddress,
+          description: `Launched ship to destination chain`,
+          metadata: {
+            shipAddress
+          }
+        })
+      }
+
+      // Start monitoring transaction
+      if (publicClient) {
+        startTransactionMonitoring(publicClient, hash)
+      }
+
+      toast.success('Ship launched successfully!')
+      await refetchStatus()
+      return hash
+    } catch (error: unknown) {
       console.error('Error launching ship:', error)
-      return { success: false, error: error as Error }
+      toast.error(error instanceof Error ? error.message : 'Failed to launch ship')
+      return null
+    } finally {
+      setIsLaunching(false)
     }
   }
 
-  // Parse ship status for easier consumption
-  const parsedStatus = shipStatus ? {
+  // Parse ship status for easier use
+  const parsedStatus: ShipStatus | null = shipStatus ? {
     currentPassengers: Number(shipStatus[0]),
     capacity: Number(shipStatus[1]),
     collectedFees: shipStatus[2],
     isLaunched: shipStatus[3],
     ccipMessageId: shipStatus[4],
     ccipFee: shipStatus[5],
-    tokenCount: Number(shipStatus[6])
+    tokenCount: shipStatus[6],
   } : null
 
   return {
-    // Actions
     boardShip,
     launchShip,
-    refetchStatus,
-    
-    // Status
+    isBoarding,
+    isLaunching,
     shipStatus: parsedStatus,
+    supportedTokens,
     ccipFee,
-    supportedTokens: supportedTokens as readonly `0x${string}`[] | undefined,
-    
-    // Transaction state
-    isPending: isPending || isConfirming,
-    isSuccess,
-    hash,
+    refetchStatus,
   }
 }
 

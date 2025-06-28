@@ -1,6 +1,5 @@
 "use client"
 
-import { motion } from "framer-motion"
 import Header from "@/components/Header"
 import HeroSection from "@/components/HeroSection"
 import StatsSection from "@/components/StatsSection"
@@ -19,7 +18,6 @@ export default function Home() {
       
       {/* Main Content */}
       <div className="relative z-20">
-        <Header />
         
         <main className="container mx-auto px-4 py-8">
           {/* Hero Section */}

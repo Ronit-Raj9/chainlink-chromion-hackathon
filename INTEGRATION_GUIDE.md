@@ -225,4 +225,170 @@ Your EthBus frontend is now connected to the deployed contracts. Users can:
 4. ✅ Track ship status
 5. ✅ Receive confirmations
 
-The integration provides a complete user experience for your cross-chain bridging protocol! 
+The integration provides a complete user experience for your cross-chain bridging protocol!
+
+## 🚀 Your Contracts Are Now Connected!
+
+Your deployed smart contracts are now fully integrated with the frontend:
+
+### Deployed Contracts
+- **ShipFactory**: `0x0b990C4E9119321Cfc9Ee7385c97422C4bd9F66C` (Arbitrum Sepolia)
+- **ShipReceiver**: `0x0b990C4E9119321Cfc9Ee7385c97422C4bd9F66C` (Ethereum Sepolia)
+
+### ✅ What's Been Connected
+
+1. **Smart Contract Integration**
+   - Contract addresses and ABIs configured
+   - Proper chain configurations (Arbitrum Sepolia ↔ Ethereum Sepolia)
+   - CCIP chain selectors properly mapped
+
+2. **Wallet Connection**
+   - RainbowKit integration with MetaMask, WalletConnect, etc.
+   - Network switching functionality
+   - Multi-chain support
+
+3. **React Hooks**
+   - `useShipFactory` - Create new ships
+   - `useShip` - Interact with individual ships
+   - `useToken` - Handle ERC20 token approvals
+
+4. **User Interface**
+   - Complete launchpad interface at `/launchpad`
+   - Token selection and amount input
+   - Network validation and switching
+   - Real-time feedback and error handling
+
+## 🧪 Testing Your Integration
+
+### Step 1: Start the Frontend
+```bash
+cd frontend-new
+npm run dev
+```
+Visit: http://localhost:3000/launchpad
+
+### Step 2: Connect Your Wallet
+1. Click "Connect Wallet"
+2. Select MetaMask or your preferred wallet
+3. Ensure you're on **Arbitrum Sepolia** network
+
+### Step 3: Get Test Tokens
+You'll need test tokens to create ships. Use these CCIP test tokens:
+
+**Arbitrum Sepolia:**
+- CCIP-BnM: `0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D`
+- CCIP-LnM: `0x139E99f0ab4084E14e6bb7DacA289a91a2d92927`
+
+Get test tokens from the [Chainlink Faucet](https://faucets.chain.link/)
+
+### Step 4: Create Your First Ship
+1. Select a token from the dropdown
+2. Enter an amount (e.g., "1.0")
+3. Choose ship capacity (1, 2, 5, or 10 passengers)
+4. Click "Approve Token" first
+5. Then click "Create Starship"
+
+### Step 5: Monitor Transaction
+- Watch for transaction confirmations
+- Check the console for detailed logs
+- View your ship on [Arbiscan](https://sepolia.arbiscan.io)
+
+## 🔧 Contract Functions Available
+
+### ShipFactory Contract
+- ✅ `createShip()` - Create new ships
+- ✅ `calculateCreationFee()` - Get creation costs
+- ✅ `getUserShips()` - List user's ships
+- ✅ `getTotalShips()` - Get total ship count
+
+### Ship Contract
+- ✅ `boardShip()` - Join existing ships
+- ✅ `launchShip()` - Launch when full
+- ✅ `getShipStatus()` - Check ship status
+- ✅ `getCcipFee()` - Get CCIP bridge cost
+
+## 🛠️ Architecture Overview
+
+```
+Frontend (Next.js + Wagmi)
+    ↓
+RainbowKit (Wallet Connection)
+    ↓
+ShipFactory Contract (Arbitrum Sepolia)
+    ↓
+Individual Ship Contracts
+    ↓
+Chainlink CCIP Bridge
+    ↓
+ShipReceiver Contract (Ethereum Sepolia)
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues:
+
+1. **"Wrong Network" Error**
+   - Switch to Arbitrum Sepolia in your wallet
+   - Use the "Switch Network" button in the interface
+
+2. **"Insufficient Fee" Error**
+   - Make sure you have enough ETH for gas fees
+   - Get Arbitrum Sepolia ETH from faucets
+
+3. **Token Approval Failed**
+   - Ensure you have the test tokens in your wallet
+   - Check token contract addresses are correct
+
+4. **Ship Creation Failed**
+   - Verify you approved tokens first
+   - Check you have enough ETH for creation fees
+
+### Debug Information
+The interface shows debug info when connected:
+- Your wallet address
+- Current chain ID
+- Whether you're on the correct chain
+- Form validation status
+
+## 🎯 Next Steps
+
+### Enhance the System:
+1. **Add Ship Discovery** - List available ships to join
+2. **Real-time Updates** - Show ship filling progress
+3. **Ship History** - Track completed journeys
+4. **Multi-token Ships** - Support multiple tokens per ship
+5. **Automated Launch** - Chainlink Automation integration
+
+### Add More Features:
+1. **Ship Marketplace** - Trade ship seats
+2. **Loyalty Rewards** - Rewards for frequent travelers
+3. **Advanced Analytics** - Cost savings calculator
+4. **Mobile App** - React Native version
+
+## 📱 Production Deployment
+
+When ready for mainnet:
+
+1. **Update Contract Addresses**
+   - Deploy to Arbitrum One
+   - Deploy receiver to Ethereum Mainnet
+   - Update `CONTRACTS` in `lib/contracts.ts`
+
+2. **Environment Variables**
+   ```env
+   NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_project_id
+   ```
+
+3. **Chain Configuration**
+   - Update supported chains in `lib/wagmi.ts`
+   - Add mainnet RPC URLs
+
+## 🎉 Success! 
+
+Your EthBus cross-chain bridge is now fully functional! Users can:
+- ✅ Connect their wallets
+- ✅ Create starships with tokens
+- ✅ Share gas costs with other passengers
+- ✅ Bridge tokens from L2 to L1 efficiently
+
+Happy bridging! 🚀 

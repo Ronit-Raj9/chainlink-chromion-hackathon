@@ -24,7 +24,7 @@ export default function ConnectWallet() {
           (!authenticationStatus ||
             authenticationStatus === 'authenticated')
 
-        return (
+    return (
           <div
             {...(!ready && {
               'aria-hidden': true,
@@ -49,18 +49,18 @@ export default function ConnectWallet() {
               }
 
               if (chain.unsupported) {
-                return (
-                  <button
+    return (
+        <button 
                     onClick={openChainModal}
                     type="button"
                     className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300"
-                  >
+        >
                     Wrong network
-                  </button>
-                )
-              }
+        </button>
+    )
+  }
 
-              return (
+  return (
                 <div className="flex gap-3">
                   <button
                     onClick={openChainModal}
@@ -88,8 +88,8 @@ export default function ConnectWallet() {
                       </div>
                     )}
                     {chain.name}
-                  </button>
-
+        </button>
+        
                   <button
                     onClick={openAccountModal}
                     type="button"
@@ -100,10 +100,10 @@ export default function ConnectWallet() {
                       ? ` (${account.displayBalance})`
                       : ''}
                   </button>
-                </div>
+        </div>
               )
             })()}
-          </div>
+    </div>
         )
       }}
     </ConnectButton.Custom>

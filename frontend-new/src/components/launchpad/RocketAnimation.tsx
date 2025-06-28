@@ -1,7 +1,8 @@
 "use client"
 
 import { motion } from "framer-motion"
-import type { LaunchState } from "./LaunchpadInterface"
+
+type LaunchState = "idle" | "configuring" | "creating" | "launching" | "traveling" | "completed" | "failed"
 
 interface RocketAnimationProps {
   launchState: LaunchState
@@ -15,42 +16,42 @@ export default function RocketAnimation({ launchState }: RocketAnimationProps) {
           y: [0, -10, 0],
           rotate: 0,
           scale: 1,
-          transition: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+          transition: { duration: 3, repeat: Infinity },
         }
       case "configuring":
         return {
           y: [0, -5, 0],
           rotate: [0, 2, -2, 0],
           scale: 1.05,
-          transition: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+          transition: { duration: 2, repeat: Infinity },
         }
       case "launching":
         return {
           y: [0, -20, -40],
           rotate: [0, -5, 5, 0],
           scale: 1.2,
-          transition: { duration: 2, ease: "easeOut" },
+          transition: { duration: 2 },
         }
       case "traveling":
         return {
           y: [-40, -60, -40],
           rotate: [0, 10, -10, 0],
           scale: [1.2, 1, 1.2],
-          transition: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+          transition: { duration: 3, repeat: Infinity },
         }
       case "completed":
         return {
           y: 0,
           rotate: 0,
           scale: 1,
-          transition: { duration: 1, ease: "easeOut" },
+          transition: { duration: 1 },
         }
       case "failed":
         return {
           y: [0, -10, 10, 0],
           rotate: [0, -15, 15, 0],
           scale: 0.9,
-          transition: { duration: 2, ease: "easeIn" },
+          transition: { duration: 2 },
         }
       default:
         return {
@@ -119,7 +120,6 @@ export default function RocketAnimation({ launchState }: RocketAnimationProps) {
           transition={{
             duration: 2,
             repeat: Infinity,
-            ease: "easeInOut",
           }}
         />
       )}
@@ -135,7 +135,6 @@ export default function RocketAnimation({ launchState }: RocketAnimationProps) {
           transition={{
             duration: 1.5,
             repeat: Infinity,
-            ease: "easeInOut",
           }}
         />
       )}

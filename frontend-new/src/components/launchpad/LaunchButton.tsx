@@ -1,7 +1,8 @@
 "use client"
 
 import { motion } from "framer-motion"
-import type { LaunchState } from "./LaunchpadInterface"
+
+type LaunchState = "idle" | "configuring" | "creating" | "launching" | "traveling" | "completed" | "failed"
 
 interface LaunchButtonProps {
   isReady: boolean
