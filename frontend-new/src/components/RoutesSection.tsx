@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowRight, Users, Clock, TrendingUp } from "lucide-react"
+import { ArrowRight, Users, Clock } from "lucide-react"
 
 const routes = [
   {
